@@ -102,10 +102,12 @@ export async function POST(request: NextRequest) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
+    const isAmazon = hostname.includes("amazon");
     const response = await fetch(url, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; QRShelf/1.0; +https://qrshelf.com)",
+        "User-Agent": isAmazon
+          ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          : "Mozilla/5.0 (compatible; QRShelf/1.0; +https://qrshelf.com)",
         Accept: "text/html,application/xhtml+xml",
       },
       signal: controller.signal,
@@ -167,40 +169,53 @@ export async function POST(request: NextRequest) {
     };
 
     // Amazon: improve image extraction (Amazon often uses JS or alternate meta)
-    if (hostname.includes("amazon") && !metadata.image) {
-      // 1) img#landingImage (main product image)
-      const landingImg = html.match(/id=["']landingImage["'][^>]+src=["']([^"']+)["']/i)
-        || html.match(/id=["']landingImage["'][^>]+data-a-dynamic-image=["']([^"']+)["']/i);
-      if (landingImg) {
-        const raw = landingImg[1];
-        if (raw.startsWith("http")) metadata.image = raw;
-        else if (raw.startsWith("{") && raw.includes("http")) {
-          const firstUrl = raw.match(/"((https?:[^"]+))"/);
-          if (firstUrl) metadata.image = firstUrl[1].replace(/\\u0026/g, "&");
-        } else metadata.image = resolveUrl(raw, baseUrl);
-      }
-      // 2) data-a-dynamic-image JSON object: first key is image URL
+    if (hostname.includes("amazon")) {
       if (!metadata.image) {
-        const dynamicMatch = html.match(/data-a-dynamic-image=["'](\{[^"']+\})["']/i);
-        if (dynamicMatch) {
-          try {
-            const decoded = dynamicMatch[1].replace(/&quot;/g, '"').replace(/\\"/g, '"');
-            const obj = JSON.parse(decoded) as Record<string, unknown>;
-            const firstKey = Object.keys(obj)[0];
-            if (firstKey) metadata.image = firstKey.replace(/\\u0026/g, "&");
-          } catch { /* ignore */ }
+        // 1) img#landingImage - src before or after id
+        const landingImg = html.match(/id=["']landingImage["'][^>]+src=["']([^"']+)["']/i)
+          || html.match(/src=["']([^"']+)["'][^>]+id=["']landingImage["']/i)
+          || html.match(/id=["']landingImage["'][^>]+data-a-dynamic-image=["']([^"']+)["']/i);
+        if (landingImg) {
+          const raw = landingImg[1];
+          if (raw.startsWith("http")) metadata.image = raw;
+          else if (raw.startsWith("{") && raw.includes("http")) {
+            const firstUrl = raw.match(/"((https?:[^"]+))"/);
+            if (firstUrl) metadata.image = firstUrl[1].replace(/\\u0026/g, "&");
+          } else metadata.image = resolveUrl(raw, baseUrl);
+        }
+        // 2) data-a-dynamic-image JSON object: first key is image URL
+        if (!metadata.image) {
+          const dynamicMatch = html.match(/data-a-dynamic-image=["'](\{[^"']+\})["']/i);
+          if (dynamicMatch) {
+            try {
+              const decoded = dynamicMatch[1].replace(/&quot;/g, '"').replace(/\\"/g, '"');
+              const obj = JSON.parse(decoded) as Record<string, unknown>;
+              const firstKey = Object.keys(obj)[0];
+              if (firstKey) metadata.image = firstKey.replace(/\\u0026/g, "&");
+            } catch { /* ignore */ }
+          }
+        }
+        // 3) twitter:image or og:image in alternate form
+        if (!metadata.image) {
+          const twImage = extractMetaContent(html, "twitter:image");
+          if (twImage) metadata.image = resolveUrl(twImage, baseUrl);
+        }
+        // 4) #imgBlkFront (e.g. Kindle)
+        if (!metadata.image) {
+          const imgBlk = html.match(/id=["']imgBlkFront["'][^>]+src=["']([^"']+)["']/i)
+            || html.match(/id=["']ebooksImgBlkFront["'][^>]+src=["']([^"']+)["']/i);
+          if (imgBlk) metadata.image = resolveUrl(imgBlk[1], baseUrl);
         }
       }
-      // 3) twitter:image or og:image in alternate form
-      if (!metadata.image) {
-        const twImage = extractMetaContent(html, "twitter:image");
-        if (twImage) metadata.image = resolveUrl(twImage, baseUrl);
-      }
-      // 4) #imgBlkFront (e.g. Kindle)
-      if (!metadata.image) {
-        const imgBlk = html.match(/id=["']imgBlkFront["'][^>]+src=["']([^"']+)["']/i)
-          || html.match(/id=["']ebooksImgBlkFront["'][^>]+src=["']([^"']+)["']/i);
-        if (imgBlk) metadata.image = resolveUrl(imgBlk[1], baseUrl);
+      // Prefer first large image from data-a-dynamic-image if og:image looks like a placeholder
+      const dynamicMatch = html.match(/data-a-dynamic-image=["'](\{[^"']+\})["']/i);
+      if (dynamicMatch && (!metadata.image || metadata.image.includes("placeholder") || metadata.image.length < 50)) {
+        try {
+          const decoded = dynamicMatch[1].replace(/&quot;/g, '"').replace(/\\"/g, '"');
+          const obj = JSON.parse(decoded) as Record<string, unknown>;
+          const firstKey = Object.keys(obj)[0];
+          if (firstKey && firstKey.startsWith("http")) metadata.image = firstKey.replace(/\\u0026/g, "&");
+        } catch { /* ignore */ }
       }
     }
 

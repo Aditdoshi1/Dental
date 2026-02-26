@@ -1,7 +1,7 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveShopContext } from "@/lib/permissions";
 import { redirect } from "next/navigation";
-import type { Item, QrCode } from "@/types/database";
+import type { Item, QrCode, Collection } from "@/types/database";
 import ProductManager from "@/components/admin/ProductManager";
 
 interface Props {
@@ -44,6 +44,14 @@ export default async function ProductsPage({ params }: Props) {
     }
   }
 
+  const { data: collections } = await supabase
+    .from("collections")
+    .select("id, title, slug")
+    .eq("shop_id", ctx.shop.id)
+    .eq("active", true)
+    .order("title")
+    .returns<Pick<Collection, "id" | "title" | "slug">[]>();
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   return (
@@ -60,6 +68,7 @@ export default async function ProductsPage({ params }: Props) {
         products={products || []}
         qrMap={qrMap}
         appUrl={appUrl}
+        collections={collections || []}
       />
     </div>
   );

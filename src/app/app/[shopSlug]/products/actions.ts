@@ -111,6 +111,54 @@ export async function deleteProduct(shopSlug: string, itemId: string) {
   revalidatePath(`/app/${shopSlug}/qr-codes`);
 }
 
+/** Add a standalone product into a collection (creates a new item in the collection with same data). */
+export async function addProductToCollection(
+  shopSlug: string,
+  shopId: string,
+  productItemId: string,
+  collectionId: string
+) {
+  const supabase = await createServerSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const { data: product } = await supabase
+    .from("items")
+    .select("title, note, product_url, image_url")
+    .eq("id", productItemId)
+    .eq("shop_id", shopId)
+    .is("collection_id", null)
+    .single();
+
+  if (!product) throw new Error("Product not found");
+
+  const { data: items } = await supabase
+    .from("items")
+    .select("sort_order")
+    .eq("collection_id", collectionId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  const sort_order = items && items.length > 0 ? items[0].sort_order + 1 : 0;
+
+  const { error } = await supabase.from("items").insert({
+    collection_id: collectionId,
+    shop_id: shopId,
+    title: product.title,
+    note: product.note || "",
+    product_url: product.product_url,
+    image_url: product.image_url || "",
+    sort_order,
+    active: true,
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/app/${shopSlug}/products`);
+  revalidatePath(`/app/${shopSlug}/collections`);
+  revalidatePath(`/app/${shopSlug}/collections/${collectionId}`);
+}
+
 export async function updateShopName(shopSlug: string, shopId: string, formData: FormData) {
   const supabase = await createServerSupabase();
 

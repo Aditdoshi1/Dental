@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useRef, useTransition } from "react";
+import { useState, useCallback, useRef, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createProduct, updateProduct, deleteProduct } from "@/app/app/[shopSlug]/products/actions";
+import { createProduct, updateProduct, deleteProduct, addProductToCollection } from "@/app/app/[shopSlug]/products/actions";
 import type { Item, QrCode } from "@/types/database";
 import {
   Plus,
@@ -18,6 +18,8 @@ import {
   Check,
   Download,
   QrCode as QrIcon,
+  FolderPlus,
+  ChevronDown,
 } from "lucide-react";
 
 interface MetadataResult {
@@ -34,9 +36,10 @@ interface Props {
   products: Item[];
   qrMap: Record<string, QrCode>;
   appUrl: string;
+  collections: { id: string; title: string; slug: string }[];
 }
 
-export default function ProductManager({ shopSlug, shopId, products: initialProducts, qrMap, appUrl }: Props) {
+export default function ProductManager({ shopSlug, shopId, products: initialProducts, qrMap, appUrl, collections }: Props) {
   const router = useRouter();
   const [products, setProducts] = useState<Item[]>(initialProducts);
   const [showForm, setShowForm] = useState(false);
@@ -44,10 +47,22 @@ export default function ProductManager({ shopSlug, shopId, products: initialProd
   const [saving, setSaving] = useState(false);
   const [fetchingMeta, setFetchingMeta] = useState(false);
   const [metaPreview, setMetaPreview] = useState<MetadataResult | null>(null);
-  const [expandedQr, setExpandedQr] = useState<string | null>(null);
+  const [addingToCollectionId, setAddingToCollectionId] = useState<string | null>(null);
+  const [collectionDropdownProductId, setCollectionDropdownProductId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const fetchTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const collectionDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (collectionDropdownProductId && collectionDropdownRef.current && !collectionDropdownRef.current.contains(e.target as Node)) {
+        setCollectionDropdownProductId(null);
+      }
+    }
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [collectionDropdownProductId]);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -69,7 +84,7 @@ export default function ProductManager({ shopSlug, shopId, products: initialProd
           const titleInput = formRef.current.querySelector('input[name="title"]') as HTMLInputElement;
           if (titleInput && !titleInput.value.trim() && data.title) titleInput.value = data.title;
           const imageInput = formRef.current.querySelector('input[name="image_url"]') as HTMLInputElement;
-          if (imageInput && !imageInput.value.trim() && data.image) imageInput.value = data.image;
+          if (imageInput && data.image) imageInput.value = data.image;
         }
       }
     } catch { /* metadata is optional */ }
@@ -154,6 +169,19 @@ export default function ProductManager({ shopSlug, shopId, products: initialProd
     } catch (err) {
       setProducts(initialProducts);
       alert(err instanceof Error ? err.message : "Failed to delete");
+    }
+  }
+
+  async function handleAddToCollection(productId: string, collectionId: string) {
+    setAddingToCollectionId(collectionId);
+    setCollectionDropdownProductId(null);
+    try {
+      await addProductToCollection(shopSlug, shopId, productId, collectionId);
+      startTransition(() => router.refresh());
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to add to collection");
+    } finally {
+      setAddingToCollectionId(null);
     }
   }
 
@@ -322,51 +350,73 @@ export default function ProductManager({ shopSlug, shopId, products: initialProd
                       </div>
                     </div>
 
-                    {/* QR Code expandable */}
+                    {/* QR Code always visible */}
                     {qr && (
                       <div className="mt-3 pt-3 border-t border-slate-100">
-                        <button
-                          onClick={() => setExpandedQr(expandedQr === product.id ? null : product.id)}
-                          className="text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1"
-                        >
-                          <QrIcon className="w-3.5 h-3.5" />
-                          {expandedQr === product.id ? "Hide QR" : "Show QR Code"}
-                        </button>
-                        {expandedQr === product.id && (
-                          <div className="mt-3 animate-fade-in">
-                            {qr.qr_png_path && (
-                              <div className="bg-white border border-slate-100 rounded-xl p-4 flex justify-center mb-2">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_png_path}`} alt="QR" className="w-32 h-32" />
-                              </div>
-                            )}
-                            <p className="text-[11px] text-slate-500 mb-2">
-                              Public link (QR points here):
-                            </p>
-                            <div className="bg-slate-50 rounded-lg p-2 mb-2 ring-1 ring-slate-200">
-                              <code className="text-[10px] text-brand-700 break-all font-mono">
-                                {appUrl}/p/{shopSlug}/{product.id}
-                              </code>
-                            </div>
-                            <div className="flex gap-1.5">
-                              {qr.qr_png_path && (
-                                <a href={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_png_path}`} download={`${product.title}-qr.png`} className="btn-primary text-[11px] flex-1 text-center py-1.5">
-                                  <Download className="w-3 h-3" /> PNG
-                                </a>
-                              )}
-                              {qr.qr_svg_path && (
-                                <a href={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_svg_path}`} download={`${product.title}-qr.svg`} className="btn-secondary text-[11px] flex-1 text-center py-1.5">
-                                  <Download className="w-3 h-3" /> SVG
-                                </a>
-                              )}
-                            </div>
+                        {qr.qr_png_path && (
+                          <div className="bg-white border border-slate-100 rounded-xl p-4 flex justify-center mb-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_png_path}`} alt="QR" className="w-28 h-28" />
                           </div>
                         )}
+                        <p className="text-[11px] text-slate-500 mb-2">
+                          Public link (QR points here):
+                        </p>
+                        <div className="bg-slate-50 rounded-lg p-2 mb-2 ring-1 ring-slate-200">
+                          <code className="text-[10px] text-brand-700 break-all font-mono">
+                            {appUrl}/p/{shopSlug}/{product.id}
+                          </code>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {qr.qr_png_path && (
+                            <a href={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_png_path}`} download={`${product.title}-qr.png`} className="btn-primary text-[11px] flex-1 text-center py-1.5">
+                              <Download className="w-3 h-3" /> PNG
+                            </a>
+                          )}
+                          {qr.qr_svg_path && (
+                            <a href={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_svg_path}`} download={`${product.title}-qr.svg`} className="btn-secondary text-[11px] flex-1 text-center py-1.5">
+                              <Download className="w-3 h-3" /> SVG
+                            </a>
+                          )}
+                        </div>
                       </div>
                     )}
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-100 flex-wrap">
+                      {collections.length > 0 && (
+                        <div className="relative" ref={collectionDropdownRef}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setCollectionDropdownProductId(collectionDropdownProductId === product.id ? null : product.id); }}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all inline-flex items-center gap-0.5"
+                            title="Add to collection"
+                          >
+                            <FolderPlus className="w-3.5 h-3.5" />
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                          {collectionDropdownProductId === product.id && (
+                            <div className="absolute left-0 top-full mt-1 py-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-[160px]">
+                              {collections.map((coll) => (
+                                <button
+                                  key={coll.id}
+                                  type="button"
+                                  onClick={() => handleAddToCollection(product.id, coll.id)}
+                                  disabled={addingToCollectionId !== null}
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                >
+                                  {addingToCollectionId === coll.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <FolderPlus className="w-3.5 h-3.5 text-slate-400" />
+                                  )}
+                                  {coll.title}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <a href={product.product_url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
