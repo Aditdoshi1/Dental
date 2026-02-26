@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Item, Shop, QrCode } from "@/types/database";
 import type { Metadata } from "next";
+import TrackScanOnLanding from "@/components/public/TrackScanOnLanding";
 
 interface Props {
   params: Promise<{ shopSlug: string; itemId: string }>;
@@ -77,6 +78,7 @@ export default async function ProductLandingPage({ params, searchParams }: Props
         background: `linear-gradient(180deg, ${primaryColor}08 0%, white 40%, ${primaryColor}04 100%)`,
       }}
     >
+      <TrackScanOnLanding srcCode={src} />
       <div className="max-w-lg mx-auto px-4 py-10 sm:py-16">
         {/* Header */}
         <div className="text-center mb-8">

@@ -38,15 +38,17 @@ export async function createProduct(shopSlug: string, shopId: string, formData: 
 
   if (error) throw new Error(error.message);
 
-  // Auto-generate QR code for this product
+  // Auto-generate QR code for this product (points to public link with ?src= for tracking)
   try {
     const admin = createAdminClient();
     const code = nanoid(8);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const redirectUrl = `${appUrl}/r/${code}`;
-    const redirectPath = `/p/${shopSlug}/${data.id}`;
+    const publicPath = `/p/${shopSlug}/${data.id}`;
+    const redirectPath = publicPath;
+    // QR and public link are the same: encode direct public URL with ?src= for scan attribution
+    const qrUrl = `${appUrl}${publicPath}?src=${code}`;
 
-    const { svg, pngBuffer } = await generateQr(redirectUrl);
+    const { svg, pngBuffer } = await generateQr(qrUrl);
     const svgPath = `qr/${code}.svg`;
     const pngPath = `qr/${code}.png`;
 
@@ -101,6 +103,7 @@ export async function updateProduct(shopSlug: string, itemId: string, formData: 
 export async function deleteProduct(shopSlug: string, itemId: string) {
   const supabase = await createServerSupabase();
 
+  await supabase.from("qr_codes").delete().eq("item_id", itemId);
   const { error } = await supabase.from("items").delete().eq("id", itemId);
   if (error) throw new Error(error.message);
 

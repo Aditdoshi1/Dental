@@ -57,17 +57,34 @@ export async function GET(request: NextRequest) {
   }
 
   if (type === "clicks") {
-    const { data: collIds } = await supabase.from("collections").select("id").eq("shop_id", shopId);
-    const ids = (collIds || []).map((c) => c.id);
+    const [{ data: collIds }, { data: standaloneItemIds }] = await Promise.all([
+      supabase.from("collections").select("id").eq("shop_id", shopId),
+      supabase.from("items").select("id").eq("shop_id", shopId).is("collection_id", null),
+    ]);
+    const collIdList = (collIds || []).map((c) => c.id);
+    const standaloneIds = (standaloneItemIds || []).map((i) => i.id);
 
-    const { data } = await supabase
-      .from("click_events")
-      .select("id, collection_id, item_id, clicked_at, items(title), collections(title)")
-      .in("collection_id", ids)
-      .order("clicked_at", { ascending: false })
-      .limit(10000);
+    const [collectionClicks, standaloneClicks] = await Promise.all([
+      collIdList.length > 0
+        ? supabase
+            .from("click_events")
+            .select("id, collection_id, item_id, clicked_at, items(title), collections(title)")
+            .in("collection_id", collIdList)
+            .order("clicked_at", { ascending: false })
+            .limit(10000)
+        : Promise.resolve({ data: null }),
+      standaloneIds.length > 0
+        ? supabase
+            .from("click_events")
+            .select("id, collection_id, item_id, clicked_at, items(title)")
+            .is("collection_id", null)
+            .in("item_id", standaloneIds)
+            .order("clicked_at", { ascending: false })
+            .limit(10000)
+        : Promise.resolve({ data: null }),
+    ]);
 
-    const rows = (data || []).map((row) => {
+    const rowsCollection = (collectionClicks.data || []).map((row) => {
       const item = row.items as unknown as { title: string } | null;
       const collection = row.collections as unknown as { title: string } | null;
       return {
@@ -77,6 +94,18 @@ export async function GET(request: NextRequest) {
         clicked_at: row.clicked_at,
       };
     });
+    const rowsStandalone = (standaloneClicks.data || []).map((row) => {
+      const item = row.items as unknown as { title: string } | null;
+      return {
+        id: row.id,
+        collection: "(standalone product)",
+        item: item?.title || "",
+        clicked_at: row.clicked_at,
+      };
+    });
+    const rows = [...rowsCollection, ...rowsStandalone].sort(
+      (a, b) => new Date(b.clicked_at).getTime() - new Date(a.clicked_at).getTime()
+    ).slice(0, 10000);
 
     return new NextResponse(arrayToCsv(rows), {
       headers: {

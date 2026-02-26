@@ -47,15 +47,17 @@ export async function createCollection(shopSlug: string, shopId: string, formDat
 
   if (error) throw new Error(error.message);
 
-  // Auto-generate exactly 1 QR code for this collection
+  // Auto-generate exactly 1 QR code for this collection (points to public link with ?src= for tracking)
   try {
     const admin = createAdminClient();
     const code = nanoid(8);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const redirectUrl = `${appUrl}/r/${code}`;
-    const redirectPath = `/s/${shopSlug}/${slug}`;
+    const publicPath = `/s/${shopSlug}/${slug}`;
+    const redirectPath = publicPath;
+    // QR and public link are the same: encode direct public URL with ?src= for scan attribution
+    const qrUrl = `${appUrl}${publicPath}?src=${code}`;
 
-    const { svg, pngBuffer } = await generateQr(redirectUrl);
+    const { svg, pngBuffer } = await generateQr(qrUrl);
     const svgPath = `qr/${code}.svg`;
     const pngPath = `qr/${code}.png`;
 

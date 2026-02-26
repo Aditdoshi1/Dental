@@ -33,9 +33,10 @@ interface Props {
   shopId: string;
   products: Item[];
   qrMap: Record<string, QrCode>;
+  appUrl: string;
 }
 
-export default function ProductManager({ shopSlug, shopId, products: initialProducts, qrMap }: Props) {
+export default function ProductManager({ shopSlug, shopId, products: initialProducts, qrMap, appUrl }: Props) {
   const router = useRouter();
   const [products, setProducts] = useState<Item[]>(initialProducts);
   const [showForm, setShowForm] = useState(false);
@@ -339,6 +340,14 @@ export default function ProductManager({ shopSlug, shopId, products: initialProd
                                 <img src={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_png_path}`} alt="QR" className="w-32 h-32" />
                               </div>
                             )}
+                            <p className="text-[11px] text-slate-500 mb-2">
+                              Public link (QR points here):
+                            </p>
+                            <div className="bg-slate-50 rounded-lg p-2 mb-2 ring-1 ring-slate-200">
+                              <code className="text-[10px] text-brand-700 break-all font-mono">
+                                {appUrl}/p/{shopSlug}/{product.id}
+                              </code>
+                            </div>
                             <div className="flex gap-1.5">
                               {qr.qr_png_path && (
                                 <a href={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_png_path}`} download={`${product.title}-qr.png`} className="btn-primary text-[11px] flex-1 text-center py-1.5">

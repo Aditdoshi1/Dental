@@ -24,22 +24,30 @@ export default async function AnalyticsPage({ params }: Props) {
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
 
-  // Pre-fetch IDs
-  const [{ data: qrIds }, { data: collIds }] = await Promise.all([
+  // Pre-fetch IDs: QR codes, collection IDs, and standalone item IDs (for click counts)
+  const [{ data: qrIds }, { data: collIds }, { data: standaloneItems }] = await Promise.all([
     supabase.from("qr_codes").select("id").eq("shop_id", shopId),
     supabase.from("collections").select("id").eq("shop_id", shopId),
+    supabase.from("items").select("id").eq("shop_id", shopId).is("collection_id", null),
   ]);
 
   const qrIdList = (qrIds || []).map((q) => q.id);
   const collIdList = (collIds || []).map((c) => c.id);
+  const standaloneItemIds = (standaloneItems || []).map((i) => i.id);
+
+  const hasCollectionClicks = collIdList.length > 0;
+  const hasStandaloneClicks = standaloneItemIds.length > 0;
 
   const [
     { count: totalScans },
     { count: scans7d },
     { count: scans30d },
-    { count: totalClicks },
-    { count: clicks7d },
-    { count: clicks30d },
+    { count: totalClicksCollection },
+    { count: clicks7dCollection },
+    { count: clicks30dCollection },
+    { count: totalClicksStandalone },
+    { count: clicks7dStandalone },
+    { count: clicks30dStandalone },
   ] = await Promise.all([
     qrIdList.length > 0
       ? supabase.from("scan_events").select("*", { count: "exact", head: true }).in("qr_code_id", qrIdList)
@@ -50,16 +58,29 @@ export default async function AnalyticsPage({ params }: Props) {
     qrIdList.length > 0
       ? supabase.from("scan_events").select("*", { count: "exact", head: true }).in("qr_code_id", qrIdList).gte("scanned_at", thirtyDaysAgo)
       : Promise.resolve({ count: 0 }),
-    collIdList.length > 0
+    hasCollectionClicks
       ? supabase.from("click_events").select("*", { count: "exact", head: true }).in("collection_id", collIdList)
       : Promise.resolve({ count: 0 }),
-    collIdList.length > 0
+    hasCollectionClicks
       ? supabase.from("click_events").select("*", { count: "exact", head: true }).in("collection_id", collIdList).gte("clicked_at", sevenDaysAgo)
       : Promise.resolve({ count: 0 }),
-    collIdList.length > 0
+    hasCollectionClicks
       ? supabase.from("click_events").select("*", { count: "exact", head: true }).in("collection_id", collIdList).gte("clicked_at", thirtyDaysAgo)
       : Promise.resolve({ count: 0 }),
+    hasStandaloneClicks
+      ? supabase.from("click_events").select("*", { count: "exact", head: true }).is("collection_id", null).in("item_id", standaloneItemIds)
+      : Promise.resolve({ count: 0 }),
+    hasStandaloneClicks
+      ? supabase.from("click_events").select("*", { count: "exact", head: true }).is("collection_id", null).in("item_id", standaloneItemIds).gte("clicked_at", sevenDaysAgo)
+      : Promise.resolve({ count: 0 }),
+    hasStandaloneClicks
+      ? supabase.from("click_events").select("*", { count: "exact", head: true }).is("collection_id", null).in("item_id", standaloneItemIds).gte("clicked_at", thirtyDaysAgo)
+      : Promise.resolve({ count: 0 }),
   ]);
+
+  const totalClicks = (totalClicksCollection ?? 0) + (totalClicksStandalone ?? 0);
+  const clicks7d = (clicks7dCollection ?? 0) + (clicks7dStandalone ?? 0);
+  const clicks30d = (clicks30dCollection ?? 0) + (clicks30dStandalone ?? 0);
 
   // Scans per QR code (30d)
   let topQrScans: { code: string; label: string; count: number }[] = [];
@@ -84,28 +105,48 @@ export default async function AnalyticsPage({ params }: Props) {
     topQrScans = Object.values(scansByQr).sort((a, b) => b.count - a.count).slice(0, 20);
   }
 
-  // Clicks per item (30d)
+  // Clicks per item (30d): collection items + standalone products
   let topItemClicks: { title: string; count: number }[] = [];
-  if (collIdList.length > 0) {
-    const { data: recentClicks } = await supabase
-      .from("click_events")
-      .select("item_id, items(title)")
-      .in("collection_id", collIdList)
-      .gte("clicked_at", thirtyDaysAgo)
-      .order("clicked_at", { ascending: false })
-      .limit(500);
+  const clicksCollectionPromise =
+    collIdList.length > 0
+      ? supabase
+          .from("click_events")
+          .select("item_id, items(title)")
+          .in("collection_id", collIdList)
+          .gte("clicked_at", thirtyDaysAgo)
+          .order("clicked_at", { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: null });
+  const clicksStandalonePromise =
+    standaloneItemIds.length > 0
+      ? supabase
+          .from("click_events")
+          .select("item_id, items(title)")
+          .is("collection_id", null)
+          .in("item_id", standaloneItemIds)
+          .gte("clicked_at", thirtyDaysAgo)
+          .order("clicked_at", { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: null });
 
-    const clicksByItem: Record<string, { title: string; count: number }> = {};
-    if (recentClicks) {
-      for (const click of recentClicks) {
-        const item = click.items as unknown as { title: string } | null;
-        const key = click.item_id;
-        if (!clicksByItem[key]) clicksByItem[key] = { title: item?.title || "", count: 0 };
-        clicksByItem[key].count++;
-      }
+  const [{ data: recentClicksCollection }, { data: recentClicksStandalone }] = await Promise.all([
+    clicksCollectionPromise,
+    clicksStandalonePromise,
+  ]);
+
+  const clicksByItem: Record<string, { title: string; count: number }> = {};
+  const mergeClicks = (rows: { item_id: string; items: unknown }[] | null) => {
+    if (!rows) return;
+    for (const click of rows) {
+      const item = click.items as unknown as { title: string } | null;
+      const key = click.item_id;
+      if (!clicksByItem[key]) clicksByItem[key] = { title: item?.title || "", count: 0 };
+      clicksByItem[key].count++;
     }
-    topItemClicks = Object.values(clicksByItem).sort((a, b) => b.count - a.count).slice(0, 20);
-  }
+  };
+  mergeClicks(recentClicksCollection);
+  mergeClicks(recentClicksStandalone);
+  topItemClicks = Object.values(clicksByItem).sort((a, b) => b.count - a.count).slice(0, 20);
 
   const conversionRate = (scans30d ?? 0) > 0
     ? (((clicks30d ?? 0) / (scans30d ?? 1)) * 100).toFixed(1)

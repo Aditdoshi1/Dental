@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ProductCard from "@/components/public/ProductCard";
 import SubscribeForm from "@/components/public/SubscribeForm";
+import TrackScanOnLanding from "@/components/public/TrackScanOnLanding";
 import type { Collection, Item, QrCode, Shop } from "@/types/database";
 import type { Metadata } from "next";
 
@@ -87,6 +88,7 @@ export default async function CollectionLandingPage({ params, searchParams }: Pr
         background: `linear-gradient(180deg, ${primaryColor}08 0%, white 40%, ${primaryColor}04 100%)`,
       }}
     >
+      <TrackScanOnLanding srcCode={src} />
       <div className="max-w-2xl mx-auto px-4 py-10 sm:py-16">
         {/* Header */}
         <div className="text-center mb-10">

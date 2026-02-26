@@ -171,17 +171,17 @@ export default async function CollectionDetailPage({ params }: Props) {
             />
           )}
 
-          {/* Public Link */}
+          {/* Public Link & QR destination (same URL) */}
           <div className="card">
-            <h2 className="font-semibold text-slate-900 mb-3">Public Link</h2>
+            <h2 className="font-semibold text-slate-900 mb-3">Public Link & QR Code</h2>
+            <p className="text-[11px] text-slate-500 mb-2">
+              The QR code points to this link. Share either — they open the same page.
+            </p>
             <div className="bg-slate-50 rounded-lg p-3 ring-1 ring-slate-200">
               <code className="text-xs text-brand-700 break-all font-mono leading-relaxed">
                 {appUrl}/s/{ctx.shop.slug}/{collection.slug}
               </code>
             </div>
-            <p className="text-[11px] text-slate-400 mt-2">
-              This is the page customers see when they scan the QR code
-            </p>
           </div>
         </div>
       </div>

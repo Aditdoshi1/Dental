@@ -166,6 +166,44 @@ export async function POST(request: NextRequest) {
       siteName: ogSiteName || parsedUrl.hostname.replace("www.", ""),
     };
 
+    // Amazon: improve image extraction (Amazon often uses JS or alternate meta)
+    if (hostname.includes("amazon") && !metadata.image) {
+      // 1) img#landingImage (main product image)
+      const landingImg = html.match(/id=["']landingImage["'][^>]+src=["']([^"']+)["']/i)
+        || html.match(/id=["']landingImage["'][^>]+data-a-dynamic-image=["']([^"']+)["']/i);
+      if (landingImg) {
+        const raw = landingImg[1];
+        if (raw.startsWith("http")) metadata.image = raw;
+        else if (raw.startsWith("{") && raw.includes("http")) {
+          const firstUrl = raw.match(/"((https?:[^"]+))"/);
+          if (firstUrl) metadata.image = firstUrl[1].replace(/\\u0026/g, "&");
+        } else metadata.image = resolveUrl(raw, baseUrl);
+      }
+      // 2) data-a-dynamic-image JSON object: first key is image URL
+      if (!metadata.image) {
+        const dynamicMatch = html.match(/data-a-dynamic-image=["'](\{[^"']+\})["']/i);
+        if (dynamicMatch) {
+          try {
+            const decoded = dynamicMatch[1].replace(/&quot;/g, '"').replace(/\\"/g, '"');
+            const obj = JSON.parse(decoded) as Record<string, unknown>;
+            const firstKey = Object.keys(obj)[0];
+            if (firstKey) metadata.image = firstKey.replace(/\\u0026/g, "&");
+          } catch { /* ignore */ }
+        }
+      }
+      // 3) twitter:image or og:image in alternate form
+      if (!metadata.image) {
+        const twImage = extractMetaContent(html, "twitter:image");
+        if (twImage) metadata.image = resolveUrl(twImage, baseUrl);
+      }
+      // 4) #imgBlkFront (e.g. Kindle)
+      if (!metadata.image) {
+        const imgBlk = html.match(/id=["']imgBlkFront["'][^>]+src=["']([^"']+)["']/i)
+          || html.match(/id=["']ebooksImgBlkFront["'][^>]+src=["']([^"']+)["']/i);
+        if (imgBlk) metadata.image = resolveUrl(imgBlk[1], baseUrl);
+      }
+    }
+
     // Clean up Amazon titles (remove the " : Amazon.com : ..." suffix)
     if (metadata.title && parsedUrl.hostname.includes("amazon")) {
       metadata.title = metadata.title

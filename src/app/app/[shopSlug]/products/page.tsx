@@ -44,6 +44,8 @@ export default async function ProductsPage({ params }: Props) {
     }
   }
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -57,6 +59,7 @@ export default async function ProductsPage({ params }: Props) {
         shopId={ctx.shop.id}
         products={products || []}
         qrMap={qrMap}
+        appUrl={appUrl}
       />
     </div>
   );
