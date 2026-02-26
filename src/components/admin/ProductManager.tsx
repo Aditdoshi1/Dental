@@ -80,6 +80,7 @@ export default function ProductManager({ shopSlug, shopId, products: initialProd
       if (res.ok) {
         const data: MetadataResult = await res.json();
         setMetaPreview(data);
+        // Auto-fill: always set image when we have it
         if (formRef.current) {
           const titleInput = formRef.current.querySelector('input[name="title"]') as HTMLInputElement;
           if (titleInput && !titleInput.value.trim() && data.title) titleInput.value = data.title;
@@ -102,6 +103,9 @@ export default function ProductManager({ shopSlug, shopId, products: initialProd
   }
 
   async function handleCreate(formData: FormData) {
+    if (metaPreview?.image && !formData.get("image_url")) {
+      formData.set("image_url", metaPreview.image);
+    }
     setSaving(true);
     try {
       const optimistic: Item = {

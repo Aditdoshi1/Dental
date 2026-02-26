@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createItem, updateItem, deleteItem } from "@/app/app/[shopSlug]/collections/actions";
+import { addProductToCollection } from "@/app/app/[shopSlug]/products/actions";
 import type { Item } from "@/types/database";
 import {
   Plus,
@@ -16,7 +17,17 @@ import {
   Image as ImageIcon,
   X,
   Check,
+  Link as LinkIconSimple,
+  Package,
 } from "lucide-react";
+
+interface StandaloneProduct {
+  id: string;
+  title: string;
+  product_url: string;
+  image_url: string;
+  note: string;
+}
 
 interface Props {
   shopSlug: string;
@@ -24,6 +35,7 @@ interface Props {
   collectionId: string;
   items: Item[];
   canEdit: boolean;
+  standaloneProducts?: StandaloneProduct[];
 }
 
 interface MetadataResult {
@@ -34,10 +46,12 @@ interface MetadataResult {
   favicon: string;
 }
 
-export default function ItemManager({ shopSlug, shopId, collectionId, items: initialItems, canEdit }: Props) {
+export default function ItemManager({ shopSlug, shopId, collectionId, items: initialItems, canEdit, standaloneProducts = [] }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>(initialItems);
   const [showForm, setShowForm] = useState(false);
+  const [addMode, setAddMode] = useState<"new" | "existing" | null>(null);
+  const [addingExistingId, setAddingExistingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [fetchingMeta, setFetchingMeta] = useState(false);
@@ -69,14 +83,14 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
         const data: MetadataResult = await res.json();
         setMetaPreview(data);
 
-        // Auto-fill empty title field
+        // Auto-fill: always set image when we have it
         if (formRef.current) {
           const titleInput = formRef.current.querySelector('input[name="title"]') as HTMLInputElement;
           if (titleInput && !titleInput.value.trim() && data.title) {
             titleInput.value = data.title;
           }
           const imageInput = formRef.current.querySelector('input[name="image_url"]') as HTMLInputElement;
-          if (imageInput && !imageInput.value.trim() && data.image) {
+          if (imageInput && data.image) {
             imageInput.value = data.image;
           }
         }
@@ -100,6 +114,9 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
   }
 
   async function handleCreateItem(formData: FormData) {
+    if (metaPreview?.image && !formData.get("image_url")) {
+      formData.set("image_url", metaPreview.image);
+    }
     setSaving(true);
     try {
       // Optimistic: add to local state immediately
@@ -119,6 +136,7 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
       setItems((prev) => [...prev, optimisticItem]);
       setShowForm(false);
       setMetaPreview(null);
+      setAddMode(null);
 
       await createItem(shopSlug, collectionId, shopId, formData);
       startTransition(() => router.refresh());
@@ -177,31 +195,95 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
     }
   }
 
+  async function handleAddExistingProduct(productId: string) {
+    setAddingExistingId(productId);
+    try {
+      await addProductToCollection(shopSlug, shopId, productId, collectionId);
+      setAddMode(null);
+      startTransition(() => router.refresh());
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to add to collection");
+    } finally {
+      setAddingExistingId(null);
+    }
+  }
+
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold text-slate-900">Products</h2>
           <span className="badge-gray">{items.length}</span>
         </div>
-        {canEdit && !showForm && (
-          <button onClick={() => setShowForm(true)} className="btn-primary text-sm">
-            <Plus className="w-4 h-4" />
-            Add Product
-          </button>
+        {canEdit && !showForm && addMode === null && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => { setAddMode("new"); setShowForm(true); }}
+              className="btn-primary text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add new product
+            </button>
+            {standaloneProducts.length > 0 && (
+              <button
+                onClick={() => setAddMode(addMode === "existing" ? null : "existing")}
+                className="btn-secondary text-sm"
+              >
+                <LinkIconSimple className="w-4 h-4" />
+                Add existing product
+              </button>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Add Product Form */}
+      {/* Add existing product: list of standalone products */}
+      {canEdit && addMode === "existing" && standaloneProducts.length > 0 && (
+        <div className="animate-scale-in mb-5 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 ring-1 ring-slate-200 dark:ring-slate-700 space-y-2">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Choose a product to add to this collection</h3>
+            <button type="button" onClick={() => setAddMode(null)} className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <ul className="max-h-48 overflow-y-auto space-y-1">
+            {standaloneProducts.map((p) => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  onClick={() => handleAddExistingProduct(p.id)}
+                  disabled={addingExistingId !== null}
+                  className="w-full flex items-center gap-3 rounded-lg p-2 text-left hover:bg-white dark:hover:bg-slate-700/50 border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-all"
+                >
+                  {p.image_url ? (
+                    <div className="w-9 h-9 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-700">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.image_url} alt="" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+                    </div>
+                  ) : (
+                    <div className="w-9 h-9 rounded-md bg-slate-200 dark:bg-slate-600 flex items-center justify-center flex-shrink-0">
+                      <Package className="w-4 h-4 text-slate-500" />
+                    </div>
+                  )}
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate flex-1">{p.title}</span>
+                  {addingExistingId === p.id ? <Loader2 className="w-4 h-4 animate-spin text-brand-500 flex-shrink-0" /> : <Plus className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Add new product form */}
       {showForm && (
         <div className="animate-scale-in mb-5">
-          <form ref={formRef} action={handleCreateItem} className="bg-slate-50 rounded-xl p-5 ring-1 ring-slate-200/50 space-y-4">
+          <form ref={formRef} action={handleCreateItem} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 sm:p-5 ring-1 ring-slate-200/50 dark:ring-slate-600/50 space-y-4">
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-brand-500" />
                 New Product
               </h3>
-              <button type="button" onClick={() => { setShowForm(false); setMetaPreview(null); }} className="p-1 rounded-md hover:bg-slate-200 text-slate-400">
+              <button type="button" onClick={() => { setShowForm(false); setMetaPreview(null); setAddMode(null); }} className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -303,7 +385,7 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
                   </>
                 )}
               </button>
-              <button type="button" onClick={() => { setShowForm(false); setMetaPreview(null); }} className="btn-secondary text-sm">
+              <button type="button" onClick={() => { setShowForm(false); setMetaPreview(null); setAddMode(null); }} className="btn-secondary text-sm">
                 Cancel
               </button>
             </div>

@@ -39,12 +39,14 @@ export default async function CollectionDetailPage({ params }: Props) {
     { data: shares },
     { data: teamMembers },
     { count: subscriberCount },
+    { data: standaloneProducts },
   ] = await Promise.all([
     supabase.from("items").select("*").eq("collection_id", id).order("sort_order", { ascending: true }).returns<Item[]>(),
     supabase.from("qr_codes").select("*").eq("collection_id", id).order("created_at", { ascending: false }).limit(1).returns<QrCode[]>(),
     supabase.from("collection_shares").select("*, profiles(display_name, email)").eq("collection_id", id),
     supabase.from("shop_members").select("user_id, profiles(display_name, email)").eq("shop_id", ctx.shop.id).eq("accepted", true),
     admin.from("collection_subscribers").select("*", { count: "exact", head: true }).eq("collection_id", id).eq("unsubscribed", false),
+    supabase.from("items").select("id, title, product_url, image_url, note").eq("shop_id", ctx.shop.id).is("collection_id", null).order("created_at", { ascending: false }).returns<Pick<Item, "id" | "title" | "product_url" | "image_url" | "note">[]>(),
   ]);
 
   const sharesList = (shares || []) as unknown as (CollectionShare & { profiles: Pick<Profile, "display_name" | "email"> })[];
@@ -59,16 +61,16 @@ export default async function CollectionDetailPage({ params }: Props) {
       {/* Breadcrumb */}
       <div className="mb-6">
         <nav className="flex items-center gap-1.5 text-sm">
-          <Link href={`${base}/collections`} className="text-slate-400 hover:text-slate-600 transition-colors">
+          <Link href={`${base}/collections`} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
             Collections
           </Link>
-          <svg className="w-3.5 h-3.5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          <span className="text-slate-700 font-medium">{collection.title}</span>
+          <span className="text-slate-700 dark:text-slate-300 font-medium">{collection.title}</span>
         </nav>
-        <div className="flex items-center gap-2.5 mt-3">
-          <h1 className="text-2xl font-bold text-slate-900">{collection.title}</h1>
+        <div className="flex items-center gap-2.5 mt-3 flex-wrap">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{collection.title}</h1>
           {collection.visibility === "personal" && <span className="badge-purple">Personal</span>}
           {!collection.active && <span className="badge-gray">Inactive</span>}
         </div>
@@ -89,6 +91,7 @@ export default async function CollectionDetailPage({ params }: Props) {
             collectionId={id}
             items={items || []}
             canEdit={userCanEdit}
+            standaloneProducts={standaloneProducts || []}
           />
         </div>
 
@@ -97,20 +100,20 @@ export default async function CollectionDetailPage({ params }: Props) {
           {/* QR Code */}
           <div className="card">
             <div className="flex items-center gap-2 mb-4">
-              <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
               </svg>
-              <h2 className="font-semibold text-slate-900">QR Code</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">QR Code</h2>
             </div>
             {!qr ? (
               <div className="text-center py-6">
-                <p className="text-sm text-slate-400">QR code is being generated...</p>
-                <p className="text-xs text-slate-300 mt-1">Refresh the page in a moment</p>
+                <p className="text-sm text-slate-400 dark:text-slate-500">QR code is being generated...</p>
+                <p className="text-xs text-slate-300 dark:text-slate-600 mt-1">Refresh the page in a moment</p>
               </div>
             ) : (
               <div>
                 {qr.qr_png_path && (
-                  <div className="bg-white border border-slate-100 rounded-xl p-6 flex justify-center mb-3">
+                  <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-600 rounded-xl p-6 flex justify-center mb-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`${supabaseUrl}/storage/v1/object/public/qr-codes/${qr.qr_png_path}`}
@@ -119,7 +122,7 @@ export default async function CollectionDetailPage({ params }: Props) {
                     />
                   </div>
                 )}
-                <p className="text-xs text-center text-slate-400 mb-3">
+                <p className="text-xs text-center text-slate-400 dark:text-slate-500 mb-3">
                   Print this QR code and display it in your clinic
                 </p>
                 <div className="flex gap-2">
@@ -149,13 +152,13 @@ export default async function CollectionDetailPage({ params }: Props) {
           {/* Subscribers */}
           <div className="card">
             <div className="flex items-center gap-2 mb-2">
-              <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              <h2 className="font-semibold text-slate-900">Subscribers</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Subscribers</h2>
             </div>
-            <p className="text-2xl font-bold text-slate-900">{subscriberCount ?? 0}</p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{subscriberCount ?? 0}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
               People subscribed to get notified when you add new products
             </p>
           </div>
@@ -173,12 +176,12 @@ export default async function CollectionDetailPage({ params }: Props) {
 
           {/* Public Link & QR destination (same URL) */}
           <div className="card">
-            <h2 className="font-semibold text-slate-900 mb-3">Public Link & QR Code</h2>
-            <p className="text-[11px] text-slate-500 mb-2">
+            <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Public Link & QR Code</h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
               The QR code points to this link. Share either — they open the same page.
             </p>
-            <div className="bg-slate-50 rounded-lg p-3 ring-1 ring-slate-200">
-              <code className="text-xs text-brand-700 break-all font-mono leading-relaxed">
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 ring-1 ring-slate-200 dark:ring-slate-600">
+              <code className="text-xs text-brand-700 dark:text-brand-300 break-all font-mono leading-relaxed">
                 {appUrl}/s/{ctx.shop.slug}/{collection.slug}
               </code>
             </div>
