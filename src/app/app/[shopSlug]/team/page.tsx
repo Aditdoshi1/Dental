@@ -105,15 +105,15 @@ export default function TeamPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
-        <p className="text-sm text-slate-500 mt-1">Invite and manage team members</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Team Management</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Invite and manage team members</p>
       </div>
 
       {/* Invite form */}
       <div className="card mb-6 max-w-xl">
         <div className="flex items-center gap-2 mb-4">
-          <UserPlus className="w-4 h-4 text-slate-500" />
-          <h2 className="font-semibold text-slate-900">Invite Team Member</h2>
+          <UserPlus className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100">Invite Team Member</h2>
         </div>
         <form onSubmit={handleInvite} className="space-y-3">
           <div className="flex gap-2">
@@ -146,7 +146,7 @@ export default function TeamPage() {
             </div>
           )}
 
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
             The person will see the invite when they sign up or log in with this email.
           </p>
         </form>
@@ -155,7 +155,7 @@ export default function TeamPage() {
       {/* Members list */}
       <div className="card max-w-xl">
         <div className="flex items-center gap-2 mb-4">
-          <h2 className="font-semibold text-slate-900">Team Members</h2>
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100">Team Members</h2>
           <span className="badge-gray">{members.length}</span>
         </div>
 
@@ -164,18 +164,18 @@ export default function TeamPage() {
             <div className="skeleton h-4 w-32 mx-auto" />
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-700">
             {members.map((m) => (
               <div key={m.id} className="flex items-center justify-between py-3 group">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 flex-shrink-0">
                     <span className="text-sm font-medium">
                       {(m.profiles?.display_name || m.invited_email).charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm text-slate-900 truncate">
+                      <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">
                         {m.profiles?.display_name || m.invited_email}
                       </p>
                       <span className={`${roleBadge(m.role)} text-[10px]`}>
@@ -183,7 +183,7 @@ export default function TeamPage() {
                       </span>
                       {!m.accepted && <span className="badge-yellow text-[10px]">Pending</span>}
                     </div>
-                    <p className="text-xs text-slate-400 truncate">{m.profiles?.email || m.invited_email}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{m.profiles?.email || m.invited_email}</p>
                   </div>
                 </div>
 
@@ -192,14 +192,14 @@ export default function TeamPage() {
                     <select
                       value={m.role}
                       onChange={(e) => handleChangeRole(m.id, e.target.value as "admin" | "member")}
-                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white hover:border-slate-300 transition-colors"
+                      className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-500 transition-colors"
                     >
                       <option value="member">Member</option>
                       <option value="admin">Admin</option>
                     </select>
                     <button
                       onClick={() => handleRemoveMember(m.id)}
-                      className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                      className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

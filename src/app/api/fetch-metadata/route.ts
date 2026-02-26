@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
           ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           : "Mozilla/5.0 (compatible; QRShelf/1.0; +https://qrshelf.com)",
         Accept: "text/html,application/xhtml+xml",
+        ...(isAmazon ? { "Accept-Language": "en-US,en;q=0.9" } : {}),
       },
       signal: controller.signal,
       redirect: "follow",
@@ -131,7 +132,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read only the first 100KB to avoid memory issues
     const reader = response.body?.getReader();
     if (!reader) {
       return NextResponse.json({ error: "Cannot read response" }, { status: 500 });
@@ -139,7 +139,9 @@ export async function POST(request: NextRequest) {
 
     let html = "";
     const decoder = new TextDecoder();
-    const maxBytes = 100 * 1024;
+
+    // Read more for Amazon (they often put image data later in the page)
+    const maxBytes = hostname.includes("amazon") ? 250 * 1024 : 100 * 1024;
     let totalBytes = 0;
 
     while (totalBytes < maxBytes) {
@@ -170,6 +172,34 @@ export async function POST(request: NextRequest) {
 
     // Amazon: improve image extraction (Amazon often uses JS or alternate meta)
     if (hostname.includes("amazon")) {
+      // 0) Any m.media-amazon.com/images/I/ URL in the page (often in script JSON)
+      if (!metadata.image || metadata.image.includes("placeholder") || metadata.image.length < 50) {
+        const mediaMatch = html.match(/https:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)/);
+        if (mediaMatch && mediaMatch[0]) {
+          metadata.image = mediaMatch[0].replace(/\\u0026/g, "&");
+        }
+      }
+      // 0b) "hiRes" or "large" in JSON (Amazon embeds image data in scripts) - try unescaped first
+      if (!metadata.image || metadata.image.length < 50) {
+        const hiResUnescaped = html.match(/"hiRes"\s*:\s*"(https:\/\/[^"]+)"/);
+        if (hiResUnescaped && hiResUnescaped[1]) metadata.image = hiResUnescaped[1].replace(/\\u0026/g, "&");
+        if (!metadata.image || metadata.image.length < 50) {
+          const largeUnescaped = html.match(/"large"\s*:\s*"(https:\/\/[^"]+)"/);
+          if (largeUnescaped && largeUnescaped[1]) metadata.image = largeUnescaped[1].replace(/\\u0026/g, "&");
+        }
+        if (!metadata.image || metadata.image.length < 50) {
+          const hiResMatch = html.match(/"hiRes"\s*:\s*"((https?:\\?\/\\?\/[^"]+))"/);
+          if (hiResMatch && hiResMatch[1]) {
+            metadata.image = hiResMatch[1].replace(/\\\//g, "/").replace(/\\u0026/g, "&");
+          }
+        }
+        if (!metadata.image || metadata.image.length < 50) {
+          const largeMatch = html.match(/"large"\s*:\s*"((https?:\\?\/\\?\/[^"]+))"/);
+          if (largeMatch && largeMatch[1]) {
+            metadata.image = largeMatch[1].replace(/\\\//g, "/").replace(/\\u0026/g, "&");
+          }
+        }
+      }
       if (!metadata.image) {
         // 1) img#landingImage - src before or after id
         const landingImg = html.match(/id=["']landingImage["'][^>]+src=["']([^"']+)["']/i)
