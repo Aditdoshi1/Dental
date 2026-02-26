@@ -198,8 +198,9 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
   async function handleAddExistingProduct(productId: string) {
     setAddingExistingId(productId);
     try {
-      await addProductToCollection(shopSlug, shopId, productId, collectionId);
+      const { item } = await addProductToCollection(shopSlug, shopId, productId, collectionId);
       setAddMode(null);
+      if (item) setItems((prev) => [item, ...prev]);
       startTransition(() => router.refresh());
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to add to collection");
@@ -212,7 +213,7 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
     <div className="card">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div className="flex items-center gap-2">
-          <h2 className="font-semibold text-slate-900">Products</h2>
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100">Products</h2>
           <span className="badge-gray">{items.length}</span>
         </div>
         {canEdit && !showForm && addMode === null && (
@@ -242,7 +243,7 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
         <div className="animate-scale-in mb-5 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 ring-1 ring-slate-200 dark:ring-slate-700 space-y-2">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Choose a product to add to this collection</h3>
-            <button type="button" onClick={() => setAddMode(null)} className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400">
+            <button type="button" onClick={() => setAddMode(null)} className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400 dark:text-slate-500">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -262,11 +263,11 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
                     </div>
                   ) : (
                     <div className="w-9 h-9 rounded-md bg-slate-200 dark:bg-slate-600 flex items-center justify-center flex-shrink-0">
-                      <Package className="w-4 h-4 text-slate-500" />
+                      <Package className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     </div>
                   )}
                   <span className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate flex-1">{p.title}</span>
-                  {addingExistingId === p.id ? <Loader2 className="w-4 h-4 animate-spin text-brand-500 flex-shrink-0" /> : <Plus className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+                  {addingExistingId === p.id ? <Loader2 className="w-4 h-4 animate-spin text-brand-500 flex-shrink-0" /> : <Plus className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />}
                 </button>
               </li>
             ))}
@@ -279,17 +280,17 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
         <div className="animate-scale-in mb-5">
           <form ref={formRef} action={handleCreateItem} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 sm:p-5 ring-1 ring-slate-200/50 dark:ring-slate-600/50 space-y-4">
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-brand-500" />
                 New Product
               </h3>
-              <button type="button" onClick={() => { setShowForm(false); setMetaPreview(null); setAddMode(null); }} className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400">
+              <button type="button" onClick={() => { setShowForm(false); setMetaPreview(null); setAddMode(null); }} className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400 dark:text-slate-500">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1.5">
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                 <span className="flex items-center gap-1.5">
                   <LinkIcon className="w-3.5 h-3.5" />
                   Product URL *
@@ -310,7 +311,7 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
                   </div>
                 )}
               </div>
-              <p className="text-[11px] text-slate-400 mt-1.5">
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
                 Paste any product link — we&apos;ll auto-fetch the title and image
               </p>
             </div>
@@ -319,7 +320,7 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
             {metaPreview && (metaPreview.title || metaPreview.image) && (
               <div className="animate-fade-in bg-white rounded-lg ring-1 ring-slate-200 p-3 flex gap-3">
                 {metaPreview.image && (
-                  <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100">
+                  <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-700">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={metaPreview.image}
@@ -330,11 +331,11 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-900 line-clamp-2">{metaPreview.title}</p>
+                  <p className="text-xs font-medium text-slate-900 dark:text-slate-100 line-clamp-2">{metaPreview.title}</p>
                   {metaPreview.description && (
-                    <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{metaPreview.description}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">{metaPreview.description}</p>
                   )}
-                  <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1">
                     {metaPreview.favicon && (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img src={metaPreview.favicon} alt="" className="w-3 h-3" onError={(e) => (e.currentTarget.style.display = "none")} />
@@ -352,17 +353,17 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
 
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">Title *</label>
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Title *</label>
                 <input name="title" required className="input-field" placeholder="Product name" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">Note</label>
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Note</label>
                 <input name="note" className="input-field" placeholder="Why you recommend this" />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1.5">
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                 <span className="flex items-center gap-1.5">
                   <ImageIcon className="w-3.5 h-3.5" />
                   Image URL
@@ -396,11 +397,11 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
       {/* Items List */}
       {items.length === 0 ? (
         <div className="text-center py-10">
-          <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-            <FolderOpen className="w-6 h-6 text-slate-400" />
+          <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
+            <FolderOpen className="w-6 h-6 text-slate-400 dark:text-slate-500" />
           </div>
-          <p className="text-sm text-slate-500 mb-1">No products yet</p>
-          <p className="text-xs text-slate-400">Add your first product recommendation above</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">No products yet</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Add your first product recommendation above</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -423,7 +424,7 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
                   </div>
                   <div className="flex gap-3 items-center">
                     <input name="sort_order" type="number" defaultValue={item.sort_order} className="input-field w-20" />
-                    <label className="flex items-center gap-1.5 text-sm text-slate-600">
+                    <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
                       <input type="hidden" name="active" value={item.active ? "true" : "false"} />
                       <input
                         type="checkbox"
@@ -447,28 +448,28 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
                 </form>
               ) : (
                 <div className="flex items-center gap-3 p-3">
-                  <span className="text-xs text-slate-300 font-mono w-5 text-right flex-shrink-0">
+                  <span className="text-xs text-slate-300 dark:text-slate-500 font-mono w-5 text-right flex-shrink-0">
                     {index + 1}
                   </span>
 
                   {/* Thumbnail */}
                   {item.image_url ? (
-                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100 ring-1 ring-slate-200">
+                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-700 ring-1 ring-slate-200 dark:ring-slate-600">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={item.image_url} alt="" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
                     </div>
                   ) : (
-                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                      <ImageIcon className="w-4 h-4 text-slate-300" />
+                    <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                      <ImageIcon className="w-4 h-4 text-slate-300 dark:text-slate-500" />
                     </div>
                   )}
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm text-slate-900 truncate">{item.title}</p>
+                      <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">{item.title}</p>
                       {!item.active && <span className="badge-gray text-[10px]">Off</span>}
                     </div>
-                    {item.note && <p className="text-xs text-slate-500 truncate">{item.note}</p>}
+                    {item.note && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{item.note}</p>}
                   </div>
 
                   {item.product_url && (
@@ -476,7 +477,7 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
                       href={item.product_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hidden sm:flex p-1.5 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-all"
+                      className="hidden sm:flex p-1.5 rounded-md text-slate-300 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 transition-all"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
@@ -486,13 +487,13 @@ export default function ItemManager({ shopSlug, shopId, collectionId, items: ini
                     <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => setEditingId(item.id)}
-                        className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+                        className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-all"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => handleDeleteItem(item.id)}
-                        className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                        className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

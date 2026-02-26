@@ -4,7 +4,6 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateQr } from "@/lib/qr";
 import { nanoid } from "nanoid";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { notifyNewProduct } from "@/lib/email";
 
@@ -39,13 +38,13 @@ export async function createProduct(shopSlug: string, shopId: string, formData: 
   if (error) throw new Error(error.message);
 
   // Auto-generate QR code for this product (points to public link with ?src= for tracking)
+  let qrData: { code: string; label: string; collection_id: null; item_id: string; shop_id: string; redirect_path: string; qr_svg_path: string; qr_png_path: string } | null = null;
   try {
     const admin = createAdminClient();
     const code = nanoid(8);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const publicPath = `/p/${shopSlug}/${data.id}`;
     const redirectPath = publicPath;
-    // QR and public link are the same: encode direct public URL with ?src= for scan attribution
     const qrUrl = `${appUrl}${publicPath}?src=${code}`;
 
     const { svg, pngBuffer } = await generateQr(qrUrl);
@@ -59,7 +58,7 @@ export async function createProduct(shopSlug: string, shopId: string, formData: 
       .from("qr-codes")
       .upload(pngPath, pngBuffer, { contentType: "image/png", upsert: true });
 
-    await supabase.from("qr_codes").insert({
+    const { data: qrRow } = await supabase.from("qr_codes").insert({
       code,
       label: title,
       collection_id: null,
@@ -68,14 +67,16 @@ export async function createProduct(shopSlug: string, shopId: string, formData: 
       redirect_path: redirectPath,
       qr_svg_path: svgPath,
       qr_png_path: pngPath,
-    });
+    }).select().single();
+
+    if (qrRow) qrData = qrRow as typeof qrData;
   } catch {
     // QR generation is non-critical
   }
 
   revalidatePath(`/app/${shopSlug}/products`);
   revalidatePath(`/app/${shopSlug}/qr-codes`);
-  redirect(`/app/${shopSlug}/products`);
+  return { item: data, qr: qrData };
 }
 
 export async function updateProduct(shopSlug: string, itemId: string, formData: FormData) {
@@ -141,7 +142,7 @@ export async function addProductToCollection(
 
   const sort_order = items && items.length > 0 ? items[0].sort_order + 1 : 0;
 
-  const { error } = await supabase.from("items").insert({
+  const { data: newItem, error } = await supabase.from("items").insert({
     collection_id: collectionId,
     shop_id: shopId,
     title: product.title,
@@ -150,13 +151,15 @@ export async function addProductToCollection(
     image_url: product.image_url || "",
     sort_order,
     active: true,
-  });
+  }).select().single();
 
   if (error) throw new Error(error.message);
 
   revalidatePath(`/app/${shopSlug}/products`);
   revalidatePath(`/app/${shopSlug}/collections`);
   revalidatePath(`/app/${shopSlug}/collections/${collectionId}`);
+
+  return { item: newItem };
 }
 
 export async function updateShopName(shopSlug: string, shopId: string, formData: FormData) {
